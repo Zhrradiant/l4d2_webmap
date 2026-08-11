@@ -1,16 +1,16 @@
 <div align="center">
 
-<img src="./logo.png" alt="L4D2 WebMap" width="112" height="112" />
+<img src="./logo.png" alt="L4D2 WebMap" width="112" height="112" style="border-radius: 24px;" />
 
 # L4D2 WebMap
 
-**求生之路2（Left 4 Dead 2）浏览器换图插件 —— 一个 URL 服务多台游戏服务器。**
+**求生之路2（Left 4 Dead 2）浏览器换图插件**
 
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)](https://go.dev) [![SourceMod](https://img.shields.io/badge/SourceMod-1.11-FF6A00)](https://www.sourcemod.net) [![Frontend](https://img.shields.io/badge/Frontend-原生HTML%2FCSS%2FJS-000000)](https://developer.mozilla.org) [![Platform](https://img.shields.io/badge/Platform-Windows%20%2F%20Linux-0078D6?logo=windows&logoColor=white)](#环境要求) [![Version](https://img.shields.io/badge/version-0.1.4-333333)]()
 
 </div>
 
-玩家在游戏内输入 `!webmap`，聊天框回复**含 4 位验证码的 URL**；浏览器打开该 URL 即可自动登录，在网页上点选地图并**发起游戏内原生投票换图**（`L4D2NativeVote` 弹板投票，多数通过即换图）。换图不再需要进服务器控制台敲命令，也不必把 RCON 权限交给玩家——网页只做"点选"，投票与切图始终发生在游戏内。
+玩家在游戏内输入 `!webmap`，聊天框回复**含 4 位验证码的 URL**；浏览器打开该 URL 即可自动登录，在网页上点选地图并**发起游戏内原生投票换图**（`L4D2NativeVote` 弹板投票，多数通过即换图）。
 
 ## 功能特性
 
@@ -73,9 +73,9 @@ cd backend
 go build -o webmap.exe .
 ```
 
-> Windows 下也可双击 `build-linux.bat` 交叉编译出 Linux 版 `l4d2_webmap`。
+> 也可以双击 `build-windows.bat` 一键构建 Windows 版；双击 `build-linux.bat` 交叉编译出 Linux 版 `l4d2_webmap`。
 
-双击 `webmap.exe`（或随附的 `启动.bat`）进入交互式控制台菜单——配置向导 / 启动服务 / 查看状态，无需记忆任何命令行参数：
+双击构建出的 `webmap.exe` 进入交互式控制台菜单——配置向导 / 启动服务 / 查看状态，无需记忆任何命令行参数：
 
 ```
 ════════════════════════════════════════════════
@@ -206,7 +206,8 @@ webmap/
 │   ├── launcher.go          ← 交互式控制台菜单（配置 / 启动 / 状态一体）
 │   ├── internal/            ← api / config / onlinemap / perm / rcon / rconcfg / session / store
 │   ├── web/                 ← 前端静态资源（index.html / style.css / app.js / fonts），经 //go:embed 内嵌
-│   └── build-linux.bat      ← 交叉编译 Linux 二进制脚本
+│   ├── build-windows.bat   ← 一键构建 Windows 版 webmap.exe
+│   └── build-linux.bat     ← 交叉编译 Linux 二进制脚本
 ├── config.example/          ← 示例配置（config.json / rcon.json / webmap.cfg / README_WEBMAP_CFG.md）
 ├── l4d2_mixmap/             ← 对其他插件的接入案例（blueblur0730 / kimika 的 WebMap RCON 对接）
 ├── tools/                   ← font-slice 字体切片工具（生成 web/fonts/ 的 woff2 分片与 font.css）
