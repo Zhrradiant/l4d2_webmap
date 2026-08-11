@@ -189,7 +189,7 @@ webmap_push_secret "与后端config.json一致"
 - 会话 token 绑定 `server_key`，跨服操作直接拒绝
 
 > [!WARNING]
-> `data/rcon.json` 中的 RCON 密码与 `config.json` 中的 `push_secret` 建议妥善保存,一旦泄露即应更换
+> `data/rcon.json` 中的 RCON 密码与 `config.json` 中的 `push_secret` 建议妥善保存，一旦泄露即应更换
 
 ## 项目结构
 
