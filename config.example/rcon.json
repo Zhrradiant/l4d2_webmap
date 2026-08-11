@@ -1,0 +1,26 @@
+// RCON 密码配置
+// mode:
+//   "unified"  - 所有端口共用一个密码
+//   "per_port" - 按端口各自配置密码
+
+// ===== 模式一：全服统一密码 =====
+{
+  "mode": "unified",
+  "unified_password": "你的RCON密码",
+  "per_port": {},
+  "host_override": {}
+}
+
+// ===== 模式二：每端口各自密码 =====
+// 将上面内容替换为：
+// {
+//   "mode": "per_port",
+//   "unified_password": "",
+//   "per_port": {
+//     "27015": "27015端口的RCON密码",
+//     "27016": "27016端口的RCON密码"
+//   },
+//   "host_override": {
+//     "cn-01": "1.2.3.4"
+//   }
+// }

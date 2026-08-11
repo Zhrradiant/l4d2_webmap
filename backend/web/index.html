@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>L4D2 地图投票</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body>
+
+<!-- 前端背景层（匹配 zhrradiant-srvmap 的 main-bg 遮罩风格） -->
+<div class="main-bg main-bg--hidden" id="mainBg">
+  <img id="mainBgImg" src="" alt="" class="main-bg__media">
+  <div class="main-bg__overlay"></div>
+</div>
+
+<!-- 主容器 -->
+<main class="container" id="app">
+
+  <!-- ====== 登录视图（雪藏：仅 ?code= 自动登录失败时出现） ====== -->
+  <section class="view view-login hidden" id="loginView">
+    <div class="login-card">
+      <div class="login-header">
+        <p class="subtitle">在游戏内输入 <code>!webmap</code> 获取验证码</p>
+      </div>
+      <form id="loginForm" class="login-form">
+        <div class="code-input-group">
+          <input type="text" id="codeInput" class="code-input" maxlength="4"
+                 autocomplete="off" spellcheck="false">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">进入</button>
+      </form>
+      <div class="login-tip" id="loginTip"></div>
+    </div>
+  </section>
+
+  <!-- ====== 第三方地图预览视图（游客：服务器列表） ====== -->
+  <section class="view view-preview hidden" id="previewView">
+    <div class="card server-bar">
+      <div class="server-info">
+        <div class="server-name-row">
+          <h2>第三方地图预览</h2>
+        </div>
+        <div class="current-map-row">
+          <span class="label">选择一台游戏服务器进入查看</span>
+        </div>
+      </div>
+      <div class="server-meta">
+        <span class="meta-item" id="previewServerCount">—</span>
+      </div>
+    </div>
+    <div class="card toolbar-card">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <input type="search" id="previewSearchInput" class="search-input"
+                 placeholder="搜索地图，检索全服哪些服务器有该图…" autocomplete="off">
+        </div>
+      </div>
+      <!-- VPK 拖拽比对：纯前端解析，不上传 -->
+      <div class="vpk-drop-zone" id="vpkDropZone">
+        <div class="vpk-drop-title">拖拽 VPK 到此处，解析 missions 并比对全服地图</div>
+        <div class="vpk-drop-hint">点击也可选择文件，检测 missions 文件夹内的 txt 及其 map 字段，与全服地图做统合比对</div>
+      </div>
+      <input type="file" id="vpkFileInput" accept=".vpk" class="hidden">
+      <div class="vpk-result hidden" id="vpkResult"></div>
+    </div>
+
+    <div class="server-grid" id="serverGrid">
+      <div class="empty-state">加载中…</div>
+    </div>
+  </section>
+  <!-- ====== 主面板视图 ====== -->
+  <section class="view view-panel hidden" id="panelView">
+
+    <!-- 服务器信息条 -->
+    <div class="card server-bar">
+      <div class="server-info">
+        <div class="server-name-row">
+          <span class="server-status-dot" id="serverDot"></span>
+          <h2 id="serverName">服务器</h2>
+          <span class="badge" id="gamemodeBadge">coop</span>
+        </div>
+        <div class="current-map-row">
+          <span class="label">当前地图：</span>
+          <span class="current-map" id="currentMap">—</span>
+          <button class="current-map-detail-btn" id="currentMapDetailBtn">详情</button>
+        </div>
+      </div>
+      <div class="server-meta">
+        <span class="meta-item" title="你的昵称">
+          <span id="playerName">—</span>
+        </span>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn">退出</button>
+      </div>
+    </div>
+
+    <!-- 筛选、搜索、排序 -->
+    <div class="card toolbar-card">
+      <div class="toolbar">
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="all">全部</button>
+          <button class="filter-btn" data-filter="official">官方</button>
+          <button class="filter-btn" data-filter="custom">三方</button>
+        </div>
+        <div class="search-wrap">
+          <input type="search" id="searchInput" class="search-input" placeholder="搜索地图…">
+        </div>
+        <select id="sortSelect" class="sort-select" title="排序">
+          <option value="default">默认顺序</option>
+          <option value="rating">评分优先</option>
+        </select>
+        <div class="tag-filter-wrap">
+          <button type="button" id="tagFilterBtn" class="filter-btn" title="地图标签筛选" aria-haspopup="true" aria-expanded="false">地图标签筛选</button>
+          <div id="tagFilterDropdown" class="tag-filter-dropdown hidden" role="menu"></div>
+        </div>
+      </div>
+      <!-- 图池编辑器入口：独立一行，全宽 -->
+      <div class="mixmap-entry-row">
+        <button type="button" class="btn btn-ghost hidden" id="mixmapOpenBtn" title="打开 Mixmap 图池编辑器">Mixmap 图池编辑器</button>
+      </div>
+    </div>
+
+    <!-- Mixmap 图池编辑器 -->
+    <div class="card mixmap-card hidden" id="mixmapPanel">
+      <div class="mixmap-header">
+        <div>
+          <h3 class="mixmap-title">Mixmap 图池编辑器</h3>
+          <p class="mixmap-hint">手动挑图组池后发起游戏内投票；末图建议为 finale。自动组池由服务器侧按服主容量随机生成。</p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="mixmapCloseBtn">收起</button>
+      </div>
+
+      <div class="mixmap-tabs">
+        <button type="button" class="mixmap-tab active" data-mix-tab="manual">手动组池</button>
+        <button type="button" class="mixmap-tab" data-mix-tab="auto">自动组池</button>
+        <button type="button" class="mixmap-tab" data-mix-tab="preset">预设管理</button>
+      </div>
+
+      <!-- 手动 -->
+      <div class="mixmap-tab-panel" id="mixTabManual">
+        <div class="mixmap-pool-toolbar">
+          <span class="mixmap-pool-count" id="mixPoolCount">图池 0 张</span>
+          <div class="mixmap-pool-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="mixPoolClearBtn">清空</button>
+            <button type="button" class="btn btn-primary btn-sm" id="mixPoolStartBtn">发起图池投票</button>
+          </div>
+        </div>
+        <div class="mixmap-pool-list" id="mixPoolList">
+          <div class="mixmap-empty">从下方地图列表点「加入图池」可选择章节，或打开详情选章节加入。支持拖拽排序。</div>
+        </div>
+        <div class="mixmap-save-row" id="mixSaveRow">
+          <input type="text" id="mixPresetNameInput" class="mixmap-input" maxlength="64" placeholder="预设名称（可选）">
+          <button type="button" class="btn btn-ghost btn-sm" id="mixPoolSaveBtn">保存为预设</button>
+        </div>
+      </div>
+
+      <!-- 自动 -->
+      <div class="mixmap-tab-panel hidden" id="mixTabAuto">
+        <p class="mixmap-hint">容量沿用服主的 <code>l4d2mm_map_pool_capacity</code>，网页不传容量。</p>
+        <div class="mixmap-auto-types">
+          <button type="button" class="btn btn-primary" data-auto-type="official">官方图池</button>
+          <button type="button" class="btn btn-primary" data-auto-type="custom">三方图池</button>
+          <button type="button" class="btn btn-primary" data-auto-type="mixtape">混合图池</button>
+        </div>
+      </div>
+
+      <!-- 预设 -->
+      <div class="mixmap-tab-panel hidden" id="mixTabPreset">
+        <div class="mixmap-pool-toolbar">
+          <span class="mixmap-pool-count">已存预设</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="mixPresetRefreshBtn">刷新</button>
+        </div>
+        <div class="mixmap-preset-search">
+          <input type="search" id="mixPresetSearchInput" class="mixmap-input" placeholder="搜索预设名称或 SteamID…">
+          <button type="button" class="btn btn-ghost btn-sm" id="mixPresetSearchBtn">搜索</button>
+        </div>
+        <div class="mixmap-preset-list" id="mixPresetList">
+          <div class="mixmap-empty">加载中…</div>
+        </div>
+        <div class="mixmap-preset-pagination hidden" id="mixPresetPagination">
+          <button type="button" class="btn btn-ghost btn-sm" id="mixPresetPrevBtn" disabled>上一页</button>
+          <span class="page-info" id="mixPresetPageInfo">第 1 页</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="mixPresetNextBtn" disabled>下一页</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地图卡片网格 -->
+    <div class="map-grid" id="mapGrid">
+      <div class="empty-state">加载中…</div>
+    </div>
+
+    <!-- 分页 -->
+    <div class="pagination" id="pagination">
+      <button class="btn btn-ghost btn-sm" id="prevPageBtn" disabled>上一页</button>
+      <span class="page-info" id="pageInfo">第 1 页</span>
+      <button class="btn btn-ghost btn-sm" id="nextPageBtn">下一页</button>
+    </div>
+
+  </section>
+</main>
+
+<!-- ====== 地图详情弹窗 ====== -->
+<div class="modal-overlay hidden" id="detailModal">
+  <div class="modal-detail">
+    <button class="modal-close-btn" id="detailCloseBtn">✕</button>
+    <div class="modal-detail-body">
+      <!-- 左栏：地图信息 -->
+      <div class="detail-left">
+        <div class="detail-image-wrap">
+          <img id="detailImage" src="" alt="" class="detail-image" onerror="this.style.display='none';this.parentElement.querySelector('.detail-image-fallback').style.display='flex';">
+          <div class="detail-image-fallback" id="detailImageFallback"></div>
+          <div class="detail-tags hidden" id="detailTags"></div>
+        </div>
+        <h2 class="detail-title" id="detailTitle">—</h2>
+        <p class="detail-subtitle" id="detailSubtitle">—</p>
+
+        <div class="detail-fields">
+          <div class="detail-field">
+            <span class="detail-field-label">文件识别名</span>
+            <span class="detail-field-value mono" id="detailIdentifier">—</span>
+          </div>
+          <div class="detail-field">
+            <span class="detail-field-label">换图代码</span>
+            <span class="detail-field-value mono" id="detailCodes">—</span>
+          </div>
+        </div>
+
+        <!-- 章节选择 -->
+        <div class="detail-section" id="chapterSection">
+          <h4 class="detail-section-title">选择章节</h4>
+          <div class="chapter-list" id="chapterList"></div>
+        </div>
+
+        <!-- 投票按钮 -->
+        <button class="btn btn-primary btn-block btn-vote" id="detailVoteBtn">
+          投票切到此图
+        </button>
+        <button class="btn btn-ghost btn-block detail-add-pool hidden" id="detailAddPoolBtn">
+          加入图池
+        </button>
+      </div>
+
+      <!-- 右栏：评论区 -->
+      <div class="detail-right">
+        <div class="comment-panel">
+          <h4 class="detail-section-title">评论</h4>
+          <div class="comment-list" id="commentList">
+            <p class="comment-empty" id="commentEmpty">暂无评论</p>
+          </div>
+          <div class="comment-form">
+            <input type="text" id="commentNick" class="comment-input" placeholder="昵称">
+            <textarea id="commentContent" class="comment-textarea" placeholder="写下你的评论…" rows="3"></textarea>
+            <button class="btn btn-primary btn-block" id="commentSubmitBtn">发表评论</button>
+            <span class="comment-status" id="commentStatus"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 加入图池：章节选择弹窗 ====== -->
+<div class="modal-overlay hidden" id="chapterPickModal">
+  <div class="card modal-card">
+    <div class="modal-header">
+      <h3>选择章节加入图池</h3>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">该战役包含多个章节，请选择要加入图池的章节：</p>
+      <p class="chapter-pick-campaign" id="chapterPickCampaign">—</p>
+      <div class="chapter-list" id="chapterPickList"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="chapterPickCancelBtn">取消</button>
+      <button class="btn btn-primary" id="chapterPickConfirmBtn">加入图池</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 投票确认弹窗（章节选择后的二次确认） ====== -->
+<div class="modal-overlay hidden" id="voteModal">
+  <div class="card modal-card">
+    <div class="modal-header">
+      <h3>发起游戏内投票</h3>
+    </div>
+    <div class="modal-body">
+      <p>将在游戏内发起原生投票，切换到：</p>
+      <div class="vote-target" id="voteTarget">—</div>
+      <p class="modal-hint">同服在线玩家投票，多数通过即换图。</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="voteCancelBtn">取消</button>
+      <button class="btn btn-primary" id="voteConfirmBtn">发起投票</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 预设预览弹窗 ====== -->
+<div class="modal-overlay hidden" id="presetPreviewModal">
+  <div class="card modal-card">
+    <div class="modal-header">
+      <h3 id="presetPreviewTitle">预设预览</h3>
+    </div>
+    <div class="modal-body">
+      <p class="preset-preview-meta" id="presetPreviewMeta"></p>
+      <ol class="preset-preview-list" id="presetPreviewList"></ol>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="presetPreviewCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Toast 提示 ====== -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ====== 底部版本 / 作者信息 ====== -->
+<div class="app-credit">L4D2 WebMap v0.1.4 · Zhrradiant</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

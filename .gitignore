@@ -1,0 +1,13 @@
+# 运行时数据（config.json / rcon.json / servers/*.json 含 RCON 密码与推送密钥，切勿上传）
+backend/data/
+
+# 编译产物
+*.exe
+
+# 第三方依赖安装产物
+node_modules/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+Desktop.ini

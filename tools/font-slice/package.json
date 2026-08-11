@@ -1,0 +1,10 @@
+{
+  "name": "webmap-font-slice",
+  "private": true,
+  "scripts": {
+    "slice": "node slice-font.js"
+  },
+  "devDependencies": {
+    "font-slice": "^1.0.2"
+  }
+}
