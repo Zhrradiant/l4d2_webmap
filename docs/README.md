@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./logo.png" alt="L4D2 WebMap" width="112" height="112" style="border-radius: 24px;" />
+<img src="./logo.png" alt="L4D2 WebMap" width="112" height="112" />
 
 # L4D2 WebMap
 
