@@ -10,20 +10,20 @@
 
 </div>
 
-玩家在游戏内输入 `!webmap`，聊天框回复**含 4 位验证码的 URL**；浏览器打开该 URL 即可自动登录，在网页上点选地图并**发起游戏内原生投票换图**（`L4D2NativeVote` 弹板投票，多数通过即换图）
+玩家在游戏内输入 `!webmap`，聊天框回复**含 4 位验证码的 URL**；浏览器打开该 URL 即可自动登录，在网页上点选地图并**发起游戏内原生投票换图**（`L4D2NativeVote` ，多数通过触发换图）
 
 ## 功能特性
 
-- **网页触发原生投票。** 浏览器选图 → 后端 RCON 下发 `sm_web_vote` → 游戏内弹板 Yes/No 投票，默认赞成多于反对即换图（可经 `webmap_vote_pass_mode` 切换为严格过半数）。
-- **验证码登录，无需注册。** 4 位去易混字符集（去除 `0/O/1/I/L`），TTL 300 秒、一次性、绑定 `server_key + player`。
-- **一个 URL 服务多台服务器。** 每台游戏服务器一个唯一 `server_key`，浏览器登录后自动落在对应服务器上。
-- **终局地图评分。** 终局向真人玩家弹出原生 1–5 星菜单，分数写入站点 `l4d2_map_ratings`（与网站 / zhrradiant-srvmap 同一套 REST 契约）。
-- **评论 / 标签 / 评分代理。** 后端同源转发到 `https://zhrradiant.com`，绕开浏览器 CORS，游客可只读预览。
-- **VPK 拖拽比对。** 把 VPK 拖进浏览器即可纯前端解析（v1/v2 格式，文件不上传），提取 `missions/*.txt` 的 Map 字段与全服地图统合比对，快速确认哪些服务器已有该图。
-- **SSE 实时推送。** 网页实时接收服务器状态、投票结果等事件。
-- **Mixmap 图池接入。** 网页图池编辑器通过 RCON 与 `l4d2_mixmap` 插件对接（见 `l4d2_mixmap/` 接入案例）。
-- **单二进制部署。** Go 后端内嵌前端静态资源（`go:embed`），部署无需附带 `web/` 目录。
-- **RCON 密码永不下发浏览器。** 只存后端 `data/rcon.json`，无任何 API 暴露。
+- **网页触发原生投票** 浏览器选图 → 后端 RCON 下发 `sm_web_vote` → 游戏内弹板 Yes/No 投票，默认赞成多于反对即换图（可经 `webmap_vote_pass_mode` 切换为严格过半数）
+- **验证码登录，无需注册** 4 位去易混字符集（去除 `0/O/1/I/L`），TTL 300 秒、一次性、绑定 `server_key + player`
+- **一个 URL 服务多台服务器** 每台游戏服务器一个唯一 `server_key`，浏览器登录后自动落在对应服务器上
+- **终局地图评分** 终局向真人玩家弹出原生 1–5 星菜单，分数写入站点 `l4d2_map_ratings`（与网站 / zhrradiant-srvmap 同一套 REST 契约）
+- **评论 / 标签 / 评分代理** 后端同源转发到 `https://zhrradiant.com`，绕开浏览器 CORS
+- **VPK 拖拽比对** 把 VPK 拖进浏览器即可纯前端解析（v1/v2 格式，文件不上传），提取 `missions/*.txt` 的 Map 字段与全服地图统合比对，快速确认哪些服务器装载对应地图
+- **SSE 实时推送** 网页实时接收服务器状态、投票结果等事件
+- **Mixmap 图池接入** 网页图池编辑器通过 RCON 与 `l4d2_mixmap` 插件对接（见 `l4d2_mixmap/` 接入案例）
+- **单二进制部署** Go 后端内嵌前端静态资源（`go:embed`），部署无需附带 `web/` 目录
+- **RCON 密码永不下发浏览器** 只存后端 `data/rcon.json`，无任何 API 暴露
 
 ## 三端架构
 
@@ -36,14 +36,14 @@
 ## 工作原理
 
 ```
- 1. 服务器上报   插件 GetAllMissions 遍历 ──REST in Pawn POST──▶ 后端写 servers/<key>.json
- 2. 验证码登录   玩家 !webmap ──推送码+回复URL──▶ 浏览器打开URL──▶ 自动登录颁发 token
- 3. 网页投票     浏览器选图 ──POST /api/action──▶ 后端 RCON sm_web_vote ──▶ 原生投票弹板 ──▶ 多数通过换图
+ 1. 服务器上报   插件 GetAllMissions 遍历 ──REST in Pawn POST──> 后端写 servers/<key>.json
+ 2. 验证码登录   玩家 !webmap ──推送码+回复URL──> 浏览器打开URL──> 自动登录颁发 token
+ 3. 网页投票     浏览器选图 ──POST /api/action──> 后端 RCON sm_web_vote ──> 原生投票弹板 ──> 多数通过换图
 ```
 
-- **地图数据来自游戏内存。** 插件通过 gamedata 内存签名（`GetAllMissions`）遍历当前战役，翻译文件自动补写缺失条目，首次推送即同步到后端。
-- **投票只在游戏内生效。** 网页不直接执行任何换图权限——后端只做 RCON 转发，最终裁决是游戏内原生的投票面板。
-- **JSON 文件存储。** 每台服务器一个文件（`data/servers/<server_key>.json`），读写加文件锁，无数据库依赖。
+- **地图数据来自游戏内存** 插件通过 gamedata 内存签名（`GetAllMissions`）遍历当前战役，翻译文件自动补写缺失条目，首次推送同步到后端
+- **投票只在游戏内生效** 网页不直接执行任何换图权限——后端只做 RCON 转发，最终裁决是游戏内原生的投票面板
+- **JSON 文件存储** 每台服务器一个文件（`data/servers/<server_key>.json`），读写加文件锁，无数据库依赖
 
 ## 技术栈
 
@@ -73,7 +73,7 @@ cd backend
 go build -o webmap.exe .
 ```
 
-> 也可以双击 `build-windows.bat` 一键构建 Windows 版；双击 `build-linux.bat` 交叉编译出 Linux 版 `l4d2_webmap`。
+> 也可以双击 `build-windows.bat` 一键构建 Windows 版；双击 `build-linux.bat` 交叉编译出 Linux 版 `l4d2_webmap`
 
 双击构建出的 `webmap.exe` 进入交互式控制台菜单——配置向导 / 启动服务 / 查看状态，无需记忆任何命令行参数：
 
@@ -91,7 +91,7 @@ go build -o webmap.exe .
   0) 退出
 ```
 
-首次使用先选 `2` 完成配置向导，再选 `1` 启动服务。启动后访问 `http://你的IP:11223/` 即可看到前端页面。
+首次使用先选 `2` 完成配置向导，再选 `1` 启动服务。启动后访问 `http://你的IP:11223/` 即可看到前端页面
 
 ### 2. 编译并安装游戏插件
 
@@ -122,10 +122,10 @@ webmap_server_key "cn-01"          // 多服务必填唯一值；留空自动用
 webmap_push_secret "与后端config.json一致"
 ```
 
-重启地图或 `sm_webmap_reload` 生效。
+重启地图或 `sm_webmap_reload` 生效
 
 > [!TIP]
-> 修改 `config.json` 的 `web_dir` 指向磁盘上的前端目录后，可热改 `index.html` / `style.css` / `app.js` 而无需重新编译后端；想重新生成字体分片（`backend/web/fonts/` 的 woff2 + font.css）时，在 `tools/font-slice/` 下执行 `npm install && npm run slice`。
+> 修改 `config.json` 的 `web_dir` 指向磁盘上的前端目录后，可热改 `index.html` / `style.css` / `app.js` 而无需重新编译后端；想重新生成字体分片（`backend/web/fonts/` 的 woff2 + font.css）时，在 `tools/font-slice/` 下执行 `npm install && npm run slice`
 
 ### 4. 玩家使用
 
@@ -133,7 +133,7 @@ webmap_push_secret "与后端config.json一致"
 2. 聊天框回复 `打开 http://你的后端/?code=AB3K （300秒内有效）`，在浏览器输入/粘贴该地址
 3. 打开后自动登录进入地图面板（验证码失效时页面会显示输入框，供手动重试）
 4. 点选地图卡片 → 「发起投票」→ 游戏内弹出原生投票面板
-5. 同服玩家投票，多数通过即换图
+5. 同服玩家投票，多数通过触发换图
 
 ## 终局地图评分
 
@@ -151,7 +151,7 @@ webmap_push_secret "与后端config.json一致"
 - **运行时数据**（后端 `data/`，不入库）：`config.json`、`rcon.json`、`servers/*.json`、`online_maps.json`、`permissions.json`、`mixmap_presets/`
 
 > [!IMPORTANT]
-> `data/rcon.json` 包含真实 RCON 密码，`data/config.json` 包含推送密钥——已被 `.gitignore` 屏蔽，**切勿提交到仓库**。
+> `data/rcon.json` 包含 RCON 密码，`data/config.json` 包含推送密钥——已在 `.gitignore` 屏蔽，**切勿暴露到仓库**
 
 ## API 一览
 
@@ -183,13 +183,13 @@ webmap_push_secret "与后端config.json一致"
 
 ## 安全
 
-- **RCON 密码只存后端** `data/rcon.json`，无 API 暴露，浏览器永远拿不到。
-- 推送接口需 `X-Api-Key`（= `push_secret`）防伪造。
-- 验证码 4 位去易混、TTL 300s、一次性、绑定 `server_key + player`。
-- 会话 token 绑定 `server_key`，跨服操作直接拒绝。
+- **RCON 密码只存后端** `data/rcon.json`，无 API 暴露
+- 推送接口需 `X-Api-Key`（= `push_secret`）防伪造
+- 验证码 4 位去易混、TTL 300s、一次性、绑定 `server_key + player`
+- 会话 token 绑定 `server_key`，跨服操作直接拒绝
 
 > [!WARNING]
-> `data/rcon.json` 中的 RCON 密码与 `config.json` 中的 `push_secret` 一旦泄露即应更换：前者等于交出服务器控制台，后者可被用于伪造推送数据。
+> `data/rcon.json` 中的 RCON 密码与 `config.json` 中的 `push_secret` 建议妥善保存,一旦泄露即应更换
 
 ## 项目结构
 
@@ -216,11 +216,11 @@ webmap/
 
 ## 接入案例：l4d2_mixmap
 
-`l4d2_mixmap/` 汇集了 `l4d2_mixmap` 插件的多个版本，并为它们提供统一的 **WebMap RCON 对接**：网页端图池编辑器通过 RCON 下发命令，触发插件的组图投票。对接被重构为一个自包含模块 `webmap_rcon.sp`，可在不同版本间无痛移植。详见该目录下的 `README.md`。
+`l4d2_mixmap/` 汇集了 `l4d2_mixmap` 插件的多个版本，并为它们提供统一的 **WebMap RCON 对接**：网页端图池编辑器通过 RCON 下发命令，触发插件的组图投票。对接被重构为一个自包含模块 `webmap_rcon.sp`，可在不同版本间无痛移植。详见该目录下的 `README.md`
 
 ## 致谢
 
-本项目的**游戏内地图数据获取与原生投票换图**底层方案，参考并复用自 SourceMod 插件 **[《L4D2 Map vote》](https://github.com/Hatsune-Imagine/l4d2-plugins/tree/main/l4d2_map_vote)**（作者：**fdxx、sorallll、HatsuneImagine**）——包括 gamedata 内存签名、SDKCall 准备、排除列表、翻译文件自动补写，以及原生投票通过后的切图逻辑。在此之上，WebMap 新增了 Go 后端、网页前端、REST in Pawn HTTP 上报、验证码登录，以及「网页触发 → 后端 RCON → 游戏内原生投票」的整套桥接架构。
+本项目的**游戏内地图数据获取与原生投票换图**底层方案，参考并复用自 SourceMod 插件 **[L4D2 Map vote](https://github.com/Hatsune-Imagine/l4d2-plugins/tree/main/l4d2_map_vote)**（作者：**fdxx、sorallll、HatsuneImagine**）——包括 gamedata 内存签名、SDKCall 准备、排除列表、翻译文件自动补写，以及原生投票通过后的切图逻辑。在此之上，WebMap 新增了 Go 后端、网页前端、REST in Pawn HTTP 上报、验证码登录，以及「网页触发 → 后端 RCON → 游戏内原生投票」的整套桥接架构
 
 同时感谢以下第三方库 / 扩展：
 
