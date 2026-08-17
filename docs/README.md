@@ -6,7 +6,7 @@
 
 **求生之路2（Left 4 Dead 2）浏览器换图插件**
 
-[![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)](https://go.dev) [![SourceMod](https://img.shields.io/badge/SourceMod-1.11-FF6A00)](https://www.sourcemod.net) [![Frontend](https://img.shields.io/badge/Frontend-原生HTML%2FCSS%2FJS-000000)](https://developer.mozilla.org) [![Platform](https://img.shields.io/badge/Platform-Windows%20%2F%20Linux-0078D6?logo=windows&logoColor=white)](#环境要求) [![Version](https://img.shields.io/badge/version-0.1.4-333333)]()
+[![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)](https://go.dev) [![SourceMod](https://img.shields.io/badge/SourceMod-1.11-FF6A00)](https://www.sourcemod.net) [![Frontend](https://img.shields.io/badge/Frontend-原生HTML%2FCSS%2FJS-000000)](https://developer.mozilla.org) [![Platform](https://img.shields.io/badge/Platform-Windows%20%2F%20Linux-0078D6?logo=windows&logoColor=white)](#环境要求) [![Version](https://img.shields.io/badge/version-0.1.5-333333)]()
 
 </div>
 

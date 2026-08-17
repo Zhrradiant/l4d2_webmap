@@ -3,7 +3,7 @@
 #endif
 #define _webmap_globals_included
 
-#define PLUGIN_VERSION  "0.1.4"
+#define PLUGIN_VERSION  "0.1.5"
 #define PLUGIN_NAME     "L4D2 WebMap"
 // 翻译文件基础名（不带 .txt：LoadTranslations 由 SM 自动补扩展名，文件路径拼装处另行补全）
 #define TRANSLATION_MISSIONS "webmap.missions.phrases"

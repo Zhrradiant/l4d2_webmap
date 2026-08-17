@@ -26,7 +26,7 @@ const defaultCfgPath = "data/config.json"
 
 // appVersion / appAuthor 用于终端菜单与启动横幅的署名展示。
 const (
-	appVersion = "0.1.2"
+	appVersion = "0.1.5"
 	appAuthor  = "Zhrradiant"
 )
 
