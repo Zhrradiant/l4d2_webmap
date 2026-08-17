@@ -124,6 +124,15 @@ webmap_push_secret "与后端config.json一致"
 
 重启地图或 `sm_webmap_reload` 生效
 
+> [!NOTE]
+> **服务器状态判定（在线/离线）**：后端默认开启主动存活探测（`probe_interval_sec`，默认每 180 秒一次，启动后立即先探一轮，对每台服务器按 `host:port` 发起 TCP 连接——Source 引擎的 RCON 即监听游戏端口，握手由系统内核完成）。TCP 连接成功 → 在线；`connection refused` / `no route to host`（端口无监听、或目标 IP 已不存在如容器重建换了 IP）→ 连续 `probe_fail_threshold` 次（默认 2）判离线；SYN 超时/DNS 等探测自身问题不改判状态
+>
+> **为什么要主动探测**：L4D2 默认 `sv_hibernate_when_empty 1`，服务器无玩家时会进入引擎休眠——休眠期间 SourceMod 核心暂停插件运行，插件不再有任何推送，单纯按"多久没推送"判离线会把"休眠中的空服"误判为离线。而休眠只停游戏逻辑，**进程与端口依然绑定**，所以 TCP 端口探测在休眠下依然可靠：空服（无玩家、无换图、甚至休眠）保持在线，只有进程真正退出才变离线
+>
+> **前提**：后端必须能访问游戏服务器的 `host:port`。探测地址与 RCON 使用同一套解析：默认用插件推送的 `host:port`（容器 IP 172.18.0.x 仅在宿主机/同网容器可达）；跨机部署（后端与游戏服不在一台机/一个 Docker 网）时用插件 `webmap_host`/`webmap_port` 上报后端可达的地址，或在 `rcon.json` 的 `host_override` 按 server_key 覆盖（与 RCON 一致）。关闭探测（`probe_interval_sec` 0）则回退"推送超时"兜底判定（`offline_after_sec`）：超过该时长无推送即离线，注意空闲/休眠服务器可能被误判，建议保持探测开启
+>
+> **卡片/文件多于实际服务器**：`data/servers/<key>.json` 是每台**历史上出现过**的服务器（如容器重建换了 IP、测试时启动过又停掉）各一份。预览页只展示在线服务器，离线/僵尸记录不会出现在卡片里（仍存在于 `data/servers/` 中）。想彻底清除文件：停掉后端 → 删除 `data/servers/` 下多余的 json → 重启后端（内存缓存启动时从磁盘重建）。多服部署务必设置固定的 `webmap_server_key`，避免 IP 变化不断产生新文件
+
 > [!TIP]
 > 修改 `config.json` 的 `web_dir` 指向磁盘上的前端目录后，可热改 `index.html` / `style.css` / `app.js` 而无需重新编译后端；想重新生成字体分片（`backend/web/fonts/` 的 woff2 + font.css）时，在 `tools/font-slice/` 下执行 `npm install && npm run slice`
 

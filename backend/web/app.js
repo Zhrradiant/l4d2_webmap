@@ -315,15 +315,16 @@
     }
   }
 
-  // renderServerList 渲染服务器卡片：名称 / 在线状态 / 游戏模式 / 当前地图（战役名）。
+  // renderServerList 渲染服务器卡片：只展示在线服务器，离线（含僵尸记录）不再显示。
   function renderServerList(list) {
     if (!dom.serverGrid) return;
-    list = Array.isArray(list) ? list : [];
+    // 只保留在线服务器
+    list = (Array.isArray(list) ? list : []).filter(function (s) { return !!s.online; });
     if (dom.previewServerCount) {
-      dom.previewServerCount.textContent = '共 ' + list.length + ' 台服务器';
+      dom.previewServerCount.textContent = '共 ' + list.length + ' 台在线服务器';
     }
     if (!list.length) {
-      dom.serverGrid.innerHTML = '<div class="empty-state">暂无服务器，等待游戏服务器上报…</div>';
+      dom.serverGrid.innerHTML = '<div class="empty-state">暂无在线服务器</div>';
       return;
     }
     dom.serverGrid.innerHTML = list.map(function (s) {
@@ -336,13 +337,11 @@
       return '' +
         '<div class="server-card" data-server-key="' + escapeHtml(s.server_key) + '">' +
           '<div class="server-card-name-row">' +
-            '<span class="server-status-dot' + (s.online ? '' : ' offline') + '"></span>' +
+            '<span class="server-status-dot"></span>' +
             '<span class="server-card-name">' + escapeHtml(name) + '</span>' +
           '</div>' +
           '<div class="server-card-row">' +
-            '<span class="server-card-map">' + (s.online
-              ? '当前地图：' + escapeHtml(curMap)
-              : '<span class="server-card-offline-tip">离线</span>') + '</span>' +
+            '<span class="server-card-map">当前地图：' + escapeHtml(curMap) + '</span>' +
             modeHtml +
           '</div>' +
         '</div>';
@@ -382,14 +381,16 @@
     }
   }
 
-  // renderSearchResults 渲染命中服务器卡片：名称 / 命中战役徽章 / 当前地图 / 模式。
+  // renderSearchResults 渲染命中服务器卡片：只展示在线服务器。
   function renderSearchResults(results) {
     if (!dom.serverGrid) return;
+    // 只保留在线服务器
+    results = (Array.isArray(results) ? results : []).filter(function (s) { return !!s.online; });
     if (dom.previewServerCount) {
-      dom.previewServerCount.textContent = '搜索「' + state.previewSearchQuery + '」：' + results.length + ' 台服务器命中';
+      dom.previewServerCount.textContent = '搜索「' + state.previewSearchQuery + '」：' + results.length + ' 台在线服务器命中';
     }
     if (!results.length) {
-      dom.serverGrid.innerHTML = '<div class="empty-state">没有服务器包含匹配的地图</div>';
+      dom.serverGrid.innerHTML = '<div class="empty-state">没有在线服务器包含匹配的地图</div>';
       return;
     }
     dom.serverGrid.innerHTML = results.map(function (s) {
@@ -420,14 +421,12 @@
       return '' +
         '<div class="server-card" data-server-key="' + escapeHtml(s.server_key) + '">' +
           '<div class="server-card-name-row">' +
-            '<span class="server-status-dot' + (s.online ? '' : ' offline') + '"></span>' +
+            '<span class="server-status-dot"></span>' +
             '<span class="server-card-name">' + escapeHtml(name) + '</span>' +
           '</div>' +
           matchesHtml +
           '<div class="server-card-row">' +
-            '<span class="server-card-map">' + (s.online
-              ? '当前地图：' + escapeHtml(curMap)
-              : '<span class="server-card-offline-tip">离线</span>') + '</span>' +
+            '<span class="server-card-map">当前地图：' + escapeHtml(curMap) + '</span>' +
             modeHtml +
           '</div>' +
         '</div>';
@@ -526,6 +525,8 @@
     var data = await resp.json();
     var hits = [];
     (data.results || []).forEach(function (s) {
+      // 只统计在线服务器（离线/僵尸记录不再展示）
+      if (!s.online) return;
       var matched = (s.matches || []).filter(function (m) {
         return m.mission === mapVal || m.chapter_map === mapVal;
       });

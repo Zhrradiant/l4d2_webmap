@@ -21,6 +21,10 @@ type Config struct {
 	CodeTTL            int    `json:"code_ttl"`             // 秒
 	RconTimeout        int    `json:"rcon_timeout"`         // 秒
 	CleanupIntervalSec int    `json:"cleanup_interval_sec"` // 会话清理间隔（秒），默认 600
+	OfflineAfterSec    int    `json:"offline_after_sec"`    // 推送超时（秒），未开启探测时超过则标记离线（兜底）；默认 180
+	ProbeIntervalSec   int    `json:"probe_interval_sec"`   // 存活探测间隔（秒），0=关闭（回退推送超时判定）；默认 180
+	ProbeTimeoutMs     int    `json:"probe_timeout_ms"`     // 单次探测超时（毫秒），默认 2000
+	ProbeFailThreshold int    `json:"probe_fail_threshold"` // 连续探测失败多少次才判定离线（防偶发网络抖动），默认 2
 	OnlineMapURL       string `json:"online_map_url"`       // 远程在线地图 CSV URL，空表示仅使用本地数据
 	OnlineMapRefreshH  int    `json:"online_map_refresh_h"` // 每日刷新时刻（0-23），默认 6
 	BgMode             string `json:"bg_mode"`              // 背景模式: "default" / "custom" / "none"
@@ -58,6 +62,10 @@ func defaultConfig() *Config {
 		CodeTTL:            300,
 		RconTimeout:        5,
 		CleanupIntervalSec: 600,
+		OfflineAfterSec:    180,
+		ProbeIntervalSec:   180,
+		ProbeTimeoutMs:     2000,
+		ProbeFailThreshold: 2,
 		OnlineMapURL:       DefaultOnlineMapURL,
 		BgMode:             "default",
 		BgURL:              DefaultBgURL,
@@ -88,6 +96,18 @@ func (c *Config) applyDefaults() {
 	if c.CleanupIntervalSec <= 0 {
 		c.CleanupIntervalSec = 600
 	}
+	if c.OfflineAfterSec <= 0 {
+		c.OfflineAfterSec = 180
+	}
+	if c.ProbeIntervalSec < 0 {
+		c.ProbeIntervalSec = 0 // 非法负值按"关闭探测"处理
+	}
+	if c.ProbeTimeoutMs <= 0 {
+		c.ProbeTimeoutMs = 2000
+	}
+	if c.ProbeFailThreshold <= 0 {
+		c.ProbeFailThreshold = 2
+	}
 	if c.OnlineMapRefreshH <= 0 || c.OnlineMapRefreshH > 23 {
 		c.OnlineMapRefreshH = 6
 	}
@@ -117,6 +137,21 @@ func (c *Config) RconDuration() time.Duration {
 // CleanupDuration 会话清理间隔。
 func (c *Config) CleanupDuration() time.Duration {
 	return time.Duration(c.CleanupIntervalSec) * time.Second
+}
+
+// OfflineAfterDuration 推送超时兜底阈值（未开启探测时超过视为离线）。
+func (c *Config) OfflineAfterDuration() time.Duration {
+	return time.Duration(c.OfflineAfterSec) * time.Second
+}
+
+// ProbeInterval 存活探测间隔（0 表示关闭探测）。
+func (c *Config) ProbeInterval() time.Duration {
+	return time.Duration(c.ProbeIntervalSec) * time.Second
+}
+
+// ProbeTimeout 单次探测超时。
+func (c *Config) ProbeTimeout() time.Duration {
+	return time.Duration(c.ProbeTimeoutMs) * time.Millisecond
 }
 
 // ServersDir 服务器 JSON 存储目录。

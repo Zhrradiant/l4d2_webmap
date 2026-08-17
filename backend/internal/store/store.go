@@ -379,11 +379,78 @@ func (s *Store) ConsumeCode(key string, code string) (*Code, error) {
 // MarkOffline 标记离线。
 func (s *Store) MarkOffline(key string) {
 	s.mu.Lock()
-	if sd, ok := s.cache[key]; ok {
+	defer s.mu.Unlock()
+	if sd, ok := s.cache[key]; ok && sd.Online {
 		sd.Online = false
+		_ = s.persistLocked(key)
 	}
-	_ = s.persistLocked(key)
-	s.mu.Unlock()
+}
+
+// ProbeTarget 存活探测目标（含 host/port，供外部网络探测使用）。
+type ProbeTarget struct {
+	Key  string
+	Host string
+	Port int
+}
+
+// ProbeTargets 返回所有服务器的探测目标（含僵尸记录，由探测结果决定去留）。
+func (s *Store) ProbeTargets() []ProbeTarget {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]ProbeTarget, 0, len(s.cache))
+	for _, sd := range s.cache {
+		out = append(out, ProbeTarget{Key: sd.ServerKey, Host: sd.Host, Port: sd.Port})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
+// ProbeOnline 探测确认在线：仅在有变化（状态翻转）时更新时间并写盘，
+// 避免每轮探测都产生磁盘写入。
+func (s *Store) ProbeOnline(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sd, ok := s.cache[key]
+	if !ok {
+		return
+	}
+	if !sd.Online {
+		sd.Online = true
+		sd.UpdatedAt = time.Now().Unix()
+		_ = s.persistLocked(key)
+	}
+}
+
+// StartSweep 启动后台推送超时兜底扫描（仅在未开启端口探测时使用）：
+// 周期检查所有服务器，超过 threshold 未收到推送的在线服务器自动标记离线
+// （复用 MarkOffline 语义）。扫描每 30 秒执行一次。
+func (s *Store) StartSweep(threshold time.Duration) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.sweepStale(threshold)
+		}
+	}()
+}
+
+func (s *Store) sweepStale(threshold time.Duration) {
+	now := time.Now().Unix()
+	limit := int64(threshold.Seconds())
+	if limit <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, sd := range s.cache {
+		if !sd.Online {
+			continue
+		}
+		if now-sd.UpdatedAt > limit {
+			sd.Online = false
+			_ = s.persistLocked(key)
+		}
+	}
 }
 
 // --- 持久化 ---

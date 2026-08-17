@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"webmap/internal/config"
 	"webmap/internal/onlinemap"
 	"webmap/internal/perm"
+	"webmap/internal/query"
 	"webmap/internal/rconcfg"
 	"webmap/internal/session"
 	"webmap/internal/store"
@@ -441,6 +443,15 @@ func runServer(cfgPath string) error {
 	if err != nil {
 		return fmt.Errorf("加载 rcon.json 失败: %w", err)
 	}
+	if cfg.ProbeIntervalSec > 0 {
+		// 存活探测（默认开启）：主动探测 TCP 端口，休眠中的服务器
+		// （引擎休眠导致 SourceMod/插件暂停，无推送数据）只要进程存活就能保持在线；
+		// 探测不可达才标记离线。探测地址与 RCON 解析一致（host_override 优先）。
+		go probeLoop(st, rconMgr, cfg)
+	} else {
+		// 未开启探测时回退推送超时兜底扫描
+		st.StartSweep(cfg.OfflineAfterDuration())
+	}
 
 	// 站点权限层（data/permissions.json；不存在自动生成）
 	permStore, err := perm.New(cfg.PermPath())
@@ -545,6 +556,71 @@ func runServer(cfgPath string) error {
 }
 
 // --- 工具 ---
+
+// probeLoop 周期探测所有服务器的 TCP 端口（= 游戏/RCON 端口）存活状态：
+//   - Alive（TCP 连接成功；休眠中的服务器由内核完成握手，照样可达）→ 在线
+//   - Dead（connection refused / no route to host，端口无监听或主机不可达）→
+//     连续 ProbeFailThreshold 次判离线（防偶发抖动）
+//   - Error（SYN 超时/DNS 等，可能网络配置问题）→ 不动状态，避免误判全离线
+//
+// 探测地址与 RCON 连接使用同一套 host 解析（rcon.json 的 host_override 优先，
+// 否则用插件推送的 host），保证"后端能连上 RCON 的地址"= "探测的地址"，
+// 跨服务器部署（后端与游戏服不在同一机/同一 Docker 网）时天然一致。
+//
+// 启动后立即执行第一轮，随后按 interval 周期执行；
+// 并发探测（上限 8），结果在主协程串行落库，避免并发写缓存。
+func probeLoop(st *store.Store, rconCfg *rconcfg.Manager, cfg *config.Config) {
+	interval := cfg.ProbeInterval()
+	timeout := cfg.ProbeTimeout()
+	threshold := cfg.ProbeFailThreshold
+	if threshold < 1 {
+		threshold = 1
+	}
+	failures := make(map[string]int)
+
+	for {
+		targets := st.ProbeTargets()
+		if len(targets) > 0 {
+			type outcome struct {
+				key    string
+				result query.Result
+			}
+			results := make([]outcome, len(targets))
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 8)
+			for i, t := range targets {
+				wg.Add(1)
+				sem <- struct{}{}
+				go func(i int, t store.ProbeTarget) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					// 探测地址 = RCON 地址：host_override 优先，否则插件推送的 host
+					host := rconCfg.GetHost(t.Key, t.Host)
+					res, err := query.Probe(host, t.Port, timeout)
+					if err != nil && res == query.Error {
+						log.Printf("[probe] %s 探测出错: %v", t.Key, err)
+					}
+					results[i] = outcome{key: t.Key, result: res}
+				}(i, t)
+			}
+			wg.Wait()
+
+			for _, o := range results {
+				switch o.result {
+				case query.Alive:
+					failures[o.key] = 0
+					st.ProbeOnline(o.key)
+				case query.Dead:
+					failures[o.key]++
+					if failures[o.key] >= threshold {
+						st.MarkOffline(o.key)
+					}
+				}
+			}
+		}
+		time.Sleep(interval)
+	}
+}
 
 // resolveWebFS 解析静态前端文件系统：优先磁盘 WebDir，不存在则回退到内嵌资源。
 // 返回供 http.FileServer 使用的 fs.FS，以及用于日志展示的描述字符串。
