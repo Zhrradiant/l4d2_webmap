@@ -143,3 +143,61 @@ func TestStartOfflineCleanup(t *testing.T) {
 	}
 	t.Fatal("2 秒内 zombie 未被清理")
 }
+
+// TestSearchMapsOnlineRef 统合搜索支持 CSV 在线中文名 / 大厅展示名（对齐具体服务器视图搜索口径）。
+func TestSearchMapsOnlineRef(t *testing.T) {
+	st, _ := newTestStore(t)
+	if err := st.UpsertServer(&ServerData{
+		ServerKey: "s1",
+		Name:      "Test Server",
+		Maps: []ChapterMap{
+			// 本地无任何中文显示名，中文名只存在于在线 CSV 元数据中
+			{Mission: "death_rain_street", MissionDisplayEn: "", MissionDisplayChi: "", ChapterMap: "c1m1_street", ChapterEn: "", ChapterChi: ""},
+			// 本地自带中文显示名（不受影响）
+			{Mission: "nightmare_factory", MissionDisplayEn: "", MissionDisplayChi: "噩梦工厂", ChapterMap: "c2m1", ChapterEn: "", ChapterChi: ""},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	onlineRef := func(mission string) *OnlineMapRef {
+		if mission == "death_rain_street" {
+			return &OnlineMapRef{
+				ChineseName: "血色黎明",
+				DisplayName: "Death Rain Street",
+				Identifier:  "death_rain_street",
+			}
+		}
+		return nil
+	}
+
+	// 1) 按 CSV 中文名命中（仅在线存在，本地无）
+	res := st.SearchMaps("血色黎明", onlineRef)
+	if len(res) != 1 || len(res[0].Matches) == 0 {
+		t.Fatalf("期望按 CSV 中文名命中 1 台服务器，实际 %d 台", len(res))
+	}
+	if len(res[0].Matches) != 1 || res[0].Matches[0].Mission != "death_rain_street" {
+		t.Fatalf("期望命中 death_rain_street，实际 %+v", res[0].Matches)
+	}
+
+	// 2) 未启用在线（onlineRef=nil）时 CSV 中文名不可命中；识别名 / 本地中文名仍可命中
+	if got := len(st.SearchMaps("血色黎明", nil)); got != 0 {
+		t.Fatalf("未启用在线数据时不应按 CSV 中文名命中，实际 %d 台", got)
+	}
+	if got := len(st.SearchMaps("death_rain_street", nil)); got != 1 {
+		t.Fatalf("未启用在线数据时仍应按识别名命中，实际 %d 台", got)
+	}
+	if got := len(st.SearchMaps("噩梦工厂", nil)); got != 1 {
+		t.Fatalf("本地中文显示名应始终可命中，实际 %d 台", got)
+	}
+
+	// 3) CSV 大厅展示名也可命中
+	if got := len(st.SearchMaps("death rain", onlineRef)); got != 1 {
+		t.Fatalf("期望按 CSV 大厅展示名命中，实际 %d 台", got)
+	}
+
+	// 4) 无关关键字不命中
+	if got := len(st.SearchMaps("不存在的图", onlineRef)); got != 0 {
+		t.Fatalf("无关关键字不应命中，实际 %d 台", got)
+	}
+}

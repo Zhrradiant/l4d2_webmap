@@ -302,7 +302,19 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	raw := s.Store.SearchMaps(q)
+	// 统合搜索：除本地字段外，也把 CSV 在线中文名 / 大厅展示名 / 识别名并入匹配，
+	// 与具体服务器视图前端 getFilteredCampaigns 的搜索口径一致。
+	// OnlineMap 未启用时 onlineRef 为 nil，退回仅本地字段匹配。
+	var onlineRef func(mission string) *store.OnlineMapRef
+	if s.OnlineMap != nil {
+		onlineRef = func(mission string) *store.OnlineMapRef {
+			if e := s.OnlineMap.FindByIdentifier(mission); e != nil {
+				return onlineToRef(e)
+			}
+			return nil
+		}
+	}
+	raw := s.Store.SearchMaps(q, onlineRef)
 	results := make([]searchServerResp, 0, len(raw))
 	for _, sr := range raw {
 		res := searchServerResp{

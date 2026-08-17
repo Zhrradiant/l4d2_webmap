@@ -192,17 +192,34 @@ func (s *Store) List() []ServerSummary {
 }
 
 // SearchMaps 跨全部服务器搜索包含关键字的地图（统合搜索）。
-// 内存遍历 + 单次 RLock，匹配 mission / 显示名 / 章节 map / 章节名；按 server_key 排序。
-func (s *Store) SearchMaps(q string) []ServerSearchResult {
+// onlineRef 可选：按战役（mission）返回在线 CSV 元数据；非 nil 时把 CSV 中文名 / 大厅展示名 /
+// 识别名一并并入匹配字段，与具体服务器视图（前端 getFilteredCampaigns）的搜索口径一致。
+// 内存遍历 + 单次 RLock，匹配 mission / 显示名 / 章节 map / 章节名 + 在线 CSV 名；按 server_key 排序。
+func (s *Store) SearchMaps(q string, onlineRef func(mission string) *OnlineMapRef) []ServerSearchResult {
 	q = strings.ToLower(strings.TrimSpace(q))
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	out := make([]ServerSearchResult, 0, len(s.cache))
+	// refCache: 单次搜索内按 mission 缓存在线元数据。同一战役的多个章节（及多台服的同名战役）
+	// 共享同一份 ref，避免每章节重复 FindByIdentifier 查找与分配；仅启用 onlineRef 时惰性创建。
+	var refCache map[string]*OnlineMapRef
 	for _, sd := range s.cache {
 		var matches []ChapterMap
 		for _, m := range sd.Maps {
-			if mapMatchesQuery(m, q) {
+			var ref *OnlineMapRef
+			if onlineRef != nil {
+				if refCache == nil {
+					refCache = make(map[string]*OnlineMapRef)
+				}
+				var ok bool
+				ref, ok = refCache[m.Mission]
+				if !ok {
+					ref = onlineRef(m.Mission)
+					refCache[m.Mission] = ref
+				}
+			}
+			if mapMatchesQuery(m, ref, q) {
 				matches = append(matches, m)
 			}
 		}
@@ -225,11 +242,16 @@ func (s *Store) SearchMaps(q string) []ServerSearchResult {
 }
 
 // mapMatchesQuery 单张地图是否命中关键字（大小写不敏感 contains）。
-func mapMatchesQuery(m ChapterMap, q string) bool {
+// ref 为该战役在在线 CSV 中的元数据；非 nil 时一并参与匹配（CSV 中文名 / 大厅展示名 / 识别名），
+// 保证 CSV 中文名也能被统合搜索命中，对齐具体服务器视图的搜索逻辑。
+func mapMatchesQuery(m ChapterMap, ref *OnlineMapRef, q string) bool {
 	if q == "" {
 		return false
 	}
 	fields := []string{m.Mission, m.MissionDisplayEn, m.MissionDisplayChi, m.ChapterMap, m.ChapterEn, m.ChapterChi}
+	if ref != nil {
+		fields = append(fields, ref.ChineseName, ref.DisplayName, ref.Identifier)
+	}
 	for _, f := range fields {
 		if strings.Contains(strings.ToLower(f), q) {
 			return true
