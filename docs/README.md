@@ -131,7 +131,7 @@ webmap_push_secret "与后端config.json一致"
 >
 > **前提**：后端必须能访问游戏服务器的 `host:port`。探测地址与 RCON 使用同一套解析：默认用插件推送的 `host:port`（容器 IP 172.18.0.x 仅在宿主机/同网容器可达）；跨机部署（后端与游戏服不在一台机/一个 Docker 网）时用插件 `webmap_host`/`webmap_port` 上报后端可达的地址，或在 `rcon.json` 的 `host_override` 按 server_key 覆盖（与 RCON 一致）。关闭探测（`probe_interval_sec` 0）则回退"推送超时"兜底判定（`offline_after_sec`）：超过该时长无推送即离线，注意空闲/休眠服务器可能被误判，建议保持探测开启
 >
-> **卡片/文件多于实际服务器**：`data/servers/<key>.json` 是每台**历史上出现过**的服务器（如容器重建换了 IP、测试时启动过又停掉）各一份。预览页只展示在线服务器，离线/僵尸记录不会出现在卡片里（仍存在于 `data/servers/` 中）。想彻底清除文件：停掉后端 → 删除 `data/servers/` 下多余的 json → 重启后端（内存缓存启动时从磁盘重建）。多服部署务必设置固定的 `webmap_server_key`，避免 IP 变化不断产生新文件
+> **卡片/文件多于实际服务器**：后端默认对**连续离线超过 `offline_cleanup_min` 分钟（默认 30，0=关闭）**的服务器**自动清空其 JSON 文件与记录**（后台每 60 秒扫描一次；恢复在线会重置计时，"连续"以最后离线时刻起算）。僵尸记录（容器重建换了 IP、测试启动过又停掉）会在持续离线约 30 分钟后被自动清除，无需手动清理
 
 > [!TIP]
 > 修改 `config.json` 的 `web_dir` 指向磁盘上的前端目录后，可热改 `index.html` / `style.css` / `app.js` 而无需重新编译后端；想重新生成字体分片（`backend/web/fonts/` 的 woff2 + font.css）时，在 `tools/font-slice/` 下执行 `npm install && npm run slice`

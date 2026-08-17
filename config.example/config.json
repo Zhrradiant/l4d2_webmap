@@ -11,6 +11,7 @@
   "probe_interval_sec": 180,
   "probe_timeout_ms": 2000,
   "probe_fail_threshold": 2,
+  "offline_cleanup_min": 30,
   "online_map_url": "",
   "online_map_refresh_h": 6,
   "bg_mode": "default",

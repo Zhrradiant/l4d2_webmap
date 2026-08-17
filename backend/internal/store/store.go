@@ -54,7 +54,8 @@ type ServerData struct {
 	Codes           []Code       `json:"codes"`
 	UpdatedAt       int64        `json:"updated_at"`
 	Online          bool         `json:"online"`
-	MixmapAvailable bool         `json:"mixmap_available"` // 插件探测 Mixmap 是否在线（可选增强）
+	OfflineSince    int64        `json:"offline_since,omitempty"` // 进入离线状态的时刻（Unix 秒）；在线时为 0
+	MixmapAvailable bool         `json:"mixmap_available"`        // 插件探测 Mixmap 是否在线（可选增强）
 }
 
 // ServerSummary 服务器公开摘要（不含 codes/host/port）。
@@ -160,6 +161,10 @@ func (s *Store) loadAll() error {
 			}
 		}
 		sd.Codes = codes
+		// 迁移兼容：旧文件无 offline_since 字段，离线服务器以 updated_at 作为离线起点兜底
+		if !sd.Online && sd.OfflineSince == 0 {
+			sd.OfflineSince = sd.UpdatedAt
+		}
 		s.cache[key] = &sd
 	}
 	return nil
@@ -275,6 +280,7 @@ func (s *Store) UpsertServer(in *ServerData) error {
 	sd.MixmapAvailable = in.MixmapAvailable
 	sd.UpdatedAt = time.Now().Unix()
 	sd.Online = true
+	sd.OfflineSince = 0 // 推送即存活，重置离线计时
 
 	// 在锁内取快照，供锁外 broadcast 使用
 	currentMap := sd.CurrentMap
@@ -376,12 +382,13 @@ func (s *Store) ConsumeCode(key string, code string) (*Code, error) {
 	return found, nil
 }
 
-// MarkOffline 标记离线。
+// MarkOffline 标记离线（记录离线起点，供连续离线自动清理使用）。
 func (s *Store) MarkOffline(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sd, ok := s.cache[key]; ok && sd.Online {
 		sd.Online = false
+		sd.OfflineSince = time.Now().Unix()
 		_ = s.persistLocked(key)
 	}
 }
@@ -406,7 +413,7 @@ func (s *Store) ProbeTargets() []ProbeTarget {
 }
 
 // ProbeOnline 探测确认在线：仅在有变化（状态翻转）时更新时间并写盘，
-// 避免每轮探测都产生磁盘写入。
+// 避免每轮探测都产生磁盘写入。恢复在线时重置离线计时。
 func (s *Store) ProbeOnline(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -416,6 +423,7 @@ func (s *Store) ProbeOnline(key string) {
 	}
 	if !sd.Online {
 		sd.Online = true
+		sd.OfflineSince = 0
 		sd.UpdatedAt = time.Now().Unix()
 		_ = s.persistLocked(key)
 	}
@@ -448,9 +456,64 @@ func (s *Store) sweepStale(threshold time.Duration) {
 		}
 		if now-sd.UpdatedAt > limit {
 			sd.Online = false
+			sd.OfflineSince = now
 			_ = s.persistLocked(key)
 		}
 	}
+}
+
+// CleanupExpired 清理连续离线超过 threshold 的服务器：删除 JSON 文件、
+// 内存记录与验证码索引。返回被清理的 key 列表。threshold <= 0 时不做任何事。
+func (s *Store) CleanupExpired(threshold time.Duration) []string {
+	limit := int64(threshold.Seconds())
+	if limit <= 0 {
+		return nil
+	}
+	now := time.Now().Unix()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var deleted []string
+	for key, sd := range s.cache {
+		// 在线或从未离线（无离线起点）的不动
+		if sd.Online || sd.OfflineSince <= 0 {
+			continue
+		}
+		if now-sd.OfflineSince < limit {
+			continue
+		}
+		// 清验证码索引
+		for _, c := range sd.Codes {
+			delete(s.codeIndex, c.Code)
+		}
+		delete(s.cache, key)
+		path := filepath.Join(s.serversDir, key+".json")
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			log.Printf("[store] 清理离线服务器文件失败 %s: %v", path, err)
+		}
+		deleted = append(deleted, key)
+	}
+	sort.Strings(deleted)
+	return deleted
+}
+
+// StartOfflineCleanup 启动连续离线自动清理：每 interval 扫描一次，
+// 超过 threshold 连续离线的服务器清空其文件与记录（threshold <= 0 表示关闭）。
+// interval 由调用方传入（生产建议 60s，便于测试缩短）。
+func (s *Store) StartOfflineCleanup(interval, threshold time.Duration) {
+	if threshold <= 0 || interval <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			if keys := s.CleanupExpired(threshold); len(keys) > 0 {
+				log.Printf("[store] 已清空连续离线超时的服务器记录: %v", keys)
+			}
+		}
+	}()
 }
 
 // --- 持久化 ---

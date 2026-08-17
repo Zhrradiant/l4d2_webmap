@@ -452,6 +452,8 @@ func runServer(cfgPath string) error {
 		// 未开启探测时回退推送超时兜底扫描
 		st.StartSweep(cfg.OfflineAfterDuration())
 	}
+	// 连续离线自动清理：超过 offline_cleanup_min 分钟持续离线的服务器自动清空文件与记录
+	st.StartOfflineCleanup(60*time.Second, cfg.OfflineCleanupDuration())
 
 	// 站点权限层（data/permissions.json；不存在自动生成）
 	permStore, err := perm.New(cfg.PermPath())
@@ -581,6 +583,11 @@ func probeLoop(st *store.Store, rconCfg *rconcfg.Manager, cfg *config.Config) {
 	for {
 		targets := st.ProbeTargets()
 		if len(targets) > 0 {
+			seen := make(map[string]bool, len(targets))
+			for _, t := range targets {
+				seen[t.Key] = true
+			}
+
 			type outcome struct {
 				key    string
 				result query.Result
@@ -615,6 +622,13 @@ func probeLoop(st *store.Store, rconCfg *rconcfg.Manager, cfg *config.Config) {
 					if failures[o.key] >= threshold {
 						st.MarkOffline(o.key)
 					}
+				}
+			}
+
+			// 清理已被自动清除记录的 key 的失败计数，避免残留计数影响重新注册的服务器
+			for k := range failures {
+				if !seen[k] {
+					delete(failures, k)
 				}
 			}
 		}

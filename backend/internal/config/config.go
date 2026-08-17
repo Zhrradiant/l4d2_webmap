@@ -25,6 +25,7 @@ type Config struct {
 	ProbeIntervalSec   int    `json:"probe_interval_sec"`   // 存活探测间隔（秒），0=关闭（回退推送超时判定）；默认 180
 	ProbeTimeoutMs     int    `json:"probe_timeout_ms"`     // 单次探测超时（毫秒），默认 2000
 	ProbeFailThreshold int    `json:"probe_fail_threshold"` // 连续探测失败多少次才判定离线（防偶发网络抖动），默认 2
+	OfflineCleanupMin  int    `json:"offline_cleanup_min"`  // 连续离线多少分钟后自动清空该服务器文件与记录（0=关闭），默认 30
 	OnlineMapURL       string `json:"online_map_url"`       // 远程在线地图 CSV URL，空表示仅使用本地数据
 	OnlineMapRefreshH  int    `json:"online_map_refresh_h"` // 每日刷新时刻（0-23），默认 6
 	BgMode             string `json:"bg_mode"`              // 背景模式: "default" / "custom" / "none"
@@ -66,6 +67,7 @@ func defaultConfig() *Config {
 		ProbeIntervalSec:   180,
 		ProbeTimeoutMs:     2000,
 		ProbeFailThreshold: 2,
+		OfflineCleanupMin:  30,
 		OnlineMapURL:       DefaultOnlineMapURL,
 		BgMode:             "default",
 		BgURL:              DefaultBgURL,
@@ -107,6 +109,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.ProbeFailThreshold <= 0 {
 		c.ProbeFailThreshold = 2
+	}
+	if c.OfflineCleanupMin < 0 {
+		c.OfflineCleanupMin = 30
 	}
 	if c.OnlineMapRefreshH <= 0 || c.OnlineMapRefreshH > 23 {
 		c.OnlineMapRefreshH = 6
@@ -152,6 +157,11 @@ func (c *Config) ProbeInterval() time.Duration {
 // ProbeTimeout 单次探测超时。
 func (c *Config) ProbeTimeout() time.Duration {
 	return time.Duration(c.ProbeTimeoutMs) * time.Millisecond
+}
+
+// OfflineCleanupDuration 连续离线自动清理阈值（0 表示关闭）。
+func (c *Config) OfflineCleanupDuration() time.Duration {
+	return time.Duration(c.OfflineCleanupMin) * time.Minute
 }
 
 // ServersDir 服务器 JSON 存储目录。
